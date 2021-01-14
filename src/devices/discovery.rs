@@ -19,7 +19,7 @@ impl Discoverer {
   }
 
   fn spawn_roku_discovery(discovery_tx: UnboundedSender<Device>) {
-    tokio::spawn(async move {
+    spawn(async move {
       // This is not fully correct. In principle devices could change (or worse, swap!) IP addresses during the lifetime
       // of this utility.  This is good enough for now.  Submit a PR if you like.
       let mut discovered_devices = Vec::<SocketAddr>::new();
@@ -39,22 +39,21 @@ impl Discoverer {
           if discovered_devices.contains(&location) { continue; }
           discovered_devices.push(location);
 
-          lookup_futures.push(Discoverer::lookup_roku_device_info(location));
-        }
-          
+          // fancy pants spawns a new task for each device so they can complete independently
+          let tx = discovery_tx.clone();
+          let lookup_future = spawn(async move {
+            if let Some(device) = Discoverer::lookup_roku_device_info(location).await {
+              tx.unbounded_send(device)
+                .expect("Failed to forward device lookup result along discovery channel");
+            }
+          });
 
-        // fancy pants spawns a new task so old lookups dont block new discoveries
-        let tx = discovery_tx.clone();
-        spawn(async move {
-          join_all(lookup_futures)
-            .await
-            .iter()
-            .for_each(|result|
-              tx
-                .unbounded_send(result.clone())
-                .expect("Failed to forward device lookup result along discovery pipe")
-            );
-        });
+          lookup_futures.push(lookup_future);
+        }
+
+        // spawn a new async task to drive the lookup futures, allowing discovery task to get
+        // right back to work.
+        spawn(async move { join_all(lookup_futures).await });
 
         // I want very prompt discovery. If I ever have to wait for any stupid piece of technology
         // to get off its lazy $60 to $1000 ass and respond to a multicast DNS request ever again I will fucking lose it,
@@ -67,7 +66,10 @@ impl Discoverer {
       }
     });
   }
-  async fn lookup_roku_device_info(mut location: std::net::SocketAddr) -> Device {
+
+  /// Gets detailed device info over HTTP. If response is unparseable or request fails,
+  /// yields None variant.
+  async fn lookup_roku_device_info(mut location: std::net::SocketAddr) -> Option<Device> {
     let request = Client::new().request(
         Request::builder()
           .method(Method::GET)
@@ -77,8 +79,12 @@ impl Discoverer {
           .body(Body::empty())
           .expect("Failed to construct request when investigating Roku device info")
       )
-      .await
-      .expect("Failed to get Roku device info");
+    .await;
+
+    let request = match request {
+      Err(_) => return None,
+      Ok(r) => r,
+    };
 
     // Unfortunately there is no way to parse directly from bytes so
     // we must use a conversion to get our hands on a (verified) utf8 str
@@ -119,10 +125,12 @@ impl Discoverer {
     location.set_port(8060);
 
     // intermediate struct => general device struct
-    Device {
-      variant: DeviceType::Roku,
-      location,
-      info
-    }
+    Some(
+      Device {
+        variant: DeviceType::Roku,
+        location,
+        info
+      }
+    )
   }
 }
