@@ -2,19 +2,19 @@
 name = "mote"
 version = "0.1.0"
 authors = ["Will Brickner <wgbrickner@gmail.com>"]
+description = "Control Roku TVs from your terminal."
 edition = "2018"
 
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+[profile.release]
+lto = "fat"
+codegen-units = 1
 
 [dependencies]
 ssdp = "0.7.0"
 hyper = "0.13"
 tokio = { version = "0.2", features = ["full"] }
 futures = "0.3"
-serde = "1.0.106"
-serde_derive = "1.0.106"
+serde = { version = "1", features = ["derive"] }
 serde-xml-rs = "0.4.0"
-tui = "0.9.4"
+tui = "0.14"
 termion = "*"
-timer = "0.2.0"
-chrono = "0.4.11"
