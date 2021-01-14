@@ -87,7 +87,8 @@ impl Discoverer {
 
     let info: DeviceInfo = {
       let roku_info: RokuDeviceInfo = serde_xml_rs::from_str(response_str).expect("Failed to parse device info from response");
-      
+      let network_type: NetworkType = roku_info.network_type.as_str().into();
+
       DeviceInfo {
         name: roku_info.name,
         product: Product {
@@ -100,12 +101,13 @@ impl Discoverer {
           serial_number: roku_info.serial_number
         },
         network: Network {
-          network_type: match roku_info.network_type.as_str() {
-            "wifi" => NetworkType::WiFi,
-            _ => NetworkType::Unknown
-          },
-          network_name: roku_info.network_name,
-          mac_address: roku_info.mac_address
+          network_type: network_type.clone(),
+          network_name: roku_info.network_name.unwrap_or("".into()),
+          mac_address: match network_type {
+            NetworkType::WiFi => roku_info.wifi_mac_address.unwrap_or("".into()),
+            NetworkType::Ethernet => roku_info.ethernet_mac_address.unwrap_or("".into()),
+            _ => "".into()
+          }
         },
         system: System {
           uptime: Some(Uptime::new(roku_info.uptime_seconds))

@@ -26,10 +26,16 @@ pub struct RokuDeviceInfo {
   pub network_type: String,
 
   #[serde(rename="network-name")]
-  pub network_name: String,
+  pub network_name: Option<String>,
   
+  #[serde(rename="doesnt-exist")]
+  pub test: Option<bool>,
+
   #[serde(rename="wifi-mac")]
-  pub mac_address: String,
+  pub wifi_mac_address: Option<String>,
+
+  #[serde(rename="ethernet-mac")]
+  pub ethernet_mac_address: Option<String>,
 
   #[serde(rename="uptime")]
   pub uptime_seconds: u64

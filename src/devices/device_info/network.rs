@@ -1,11 +1,10 @@
 use std::fmt::{Display, Formatter, Result};
 
 /// Describes the link-layer technology that supports the network connection.
-/// Presently the only variant is 'WiFi', but for the unfamiliar this could also
-/// have a variant called 'Ethernet' and others.
 #[derive(Debug, Clone)]
 pub enum NetworkType {
   WiFi,
+  Ethernet,
   Unknown
 }
 
@@ -15,9 +14,20 @@ impl Display for NetworkType {
       f, "{}",
       match self {
         NetworkType::WiFi => "WiFi",
+        NetworkType::Ethernet => "Ethernet",
         NetworkType::Unknown => "Unknown"
       }
     )
+  }
+}
+
+impl From<&str> for NetworkType {
+  fn from(literal: &str) -> Self {
+    match literal {
+      "wifi" => Self::WiFi,
+      "ethernet" => Self::Ethernet,
+      _ => Self::Unknown
+    }
   }
 }
 
