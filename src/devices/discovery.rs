@@ -31,9 +31,7 @@ impl Discoverer {
         request.set(MX(0));
         request.set(ST::Target(FieldMap::new("roku:ecp").unwrap()));
 
-        // consider reporting device locations as they're discovered, do each lookup independently,
-        // this way the user can see a device and a "Loading..." placeholder for device info
-        // and reduce the perceived latency
+        // lookup each device independently for lower latency
         let mut lookup_futures = vec![];
         for (_, location) in request.multicast().unwrap() {
           if discovered_devices.contains(&location) { continue; }
