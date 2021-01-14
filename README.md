@@ -6,8 +6,11 @@ I'm always losing my remote, so I created `mote`.
 
 # Installation
 
+NOTE: This crate has a dependency which requires the nightly toolchain.
+If you don't have it installed, first run `rustup install nightly`.
+
 ```
-$ cargo install cargo-mote
+$ cargo +nightly install cargo-mote
 ```
 
 # Usage

@@ -67,7 +67,6 @@ impl Discoverer {
       }
     });
   }
-
   async fn lookup_roku_device_info(mut location: std::net::SocketAddr) -> Device {
     let request = Client::new().request(
         Request::builder()
