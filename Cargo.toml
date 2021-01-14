@@ -1,9 +1,12 @@
 [package]
-name = "mote"
+name = "cargo-mote"
 version = "0.1.0"
 authors = ["Will Brickner <wgbrickner@gmail.com>"]
 description = "Control Roku TVs from your terminal."
 edition = "2018"
+repository = "https://github.com/wbrickner/mote"
+keywords = ["roku", "tv", "remote", "mote"]
+categories = ["command-line-utilities"]
 
 [profile.release]
 lto = "fat"
