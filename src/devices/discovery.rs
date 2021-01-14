@@ -1,9 +1,9 @@
-use std::{net::SocketAddr, str::from_utf8, time::Duration};
+use std::{net::SocketAddr, str::from_utf8};
 use futures::channel::mpsc::{unbounded, UnboundedSender, UnboundedReceiver};
 use hyper::{Body, Client, Method, Request, body::to_bytes};
 use ssdp::{FieldMap, header::{HeaderMut, Man, MX, ST}, message::{SearchRequest, Multicast}};
 use futures::{future::join_all};
-use tokio::{spawn, time::delay_for};
+use tokio::spawn;
 
 use super::{Device, DeviceInfo, DeviceType, Model, Network, NetworkType, Product, RokuDeviceInfo, System, Uptime};
 
@@ -23,7 +23,6 @@ impl Discoverer {
       // This is not fully correct. In principle devices could change (or worse, swap!) IP addresses during the lifetime
       // of this utility.  This is good enough for now.  Submit a PR if you like.
       let mut discovered_devices = Vec::<SocketAddr>::new();
-      let half_second = Duration::from_millis(500);
       
       // This is entirely Roku-specific nonsense
       loop {

@@ -1,10 +1,17 @@
-use futures::{channel::mpsc::UnboundedReceiver, future::{select, Either}, stream::{StreamExt, Next}};
-use tokio::time::{Delay, delay_for};
-use std::{collections::HashMap, thread::spawn, time::{Duration, Instant}};
+use futures::{channel::mpsc::UnboundedReceiver, future::{select, Either}, stream::StreamExt};
+use std::{collections::HashMap, time::Instant};
 use std::io;
 use std::sync::{Arc, Mutex};
 use termion::{event::Key, raw::{IntoRawMode, RawTerminal}};
-use tui::{Terminal, backend::TermionBackend, layout::{Alignment, Rect}, style::{Color, Style}, symbols::line::VERTICAL, text::{Span, Spans}, widgets::{Block, BorderType, Borders, Paragraph, Tabs}};
+use tui::{
+  Terminal, 
+  backend::TermionBackend, 
+  layout::{Alignment, Rect}, 
+  style::{Color, Style}, 
+  text::{Span, Spans}, 
+  widgets::{Block, BorderType, Borders, Paragraph, Tabs},
+  symbols::line::VERTICAL
+};
 
 mod user_input;
 use user_input::UserInput;
