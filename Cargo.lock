@@ -77,7 +77,7 @@ checksum = "4964518bd3b4a8190e832886cdc0da9794f12e8e6c1613a9e90ff331c4c8724b"
 
 [[package]]
 name = "cargo-mote"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "futures",
  "hyper 0.13.9",
