@@ -27,13 +27,13 @@ enum UIContext { Main, DeviceInfo }
 
 pub struct UI {
   /// terminal abstraction
-	terminal: Terminal<TermionBackend<RawTerminal<std::io::Stdout>>>,
+  terminal: Terminal<TermionBackend<RawTerminal<std::io::Stdout>>>,
 
-	/// Device states
-	devices: Vec<Device>,
+  /// Device states
+  devices: Vec<Device>,
 
-	/// Which device is active
-	selected_device_index: usize,
+  /// Which device is active
+  selected_device_index: usize,
 
   /// Which subscreen the user is viewing
   context: UIContext,
@@ -43,30 +43,30 @@ pub struct UI {
 }
 
 impl UI {
-	pub fn new() -> Self {
-		let stdout = io::stdout()
-			.into_raw_mode()
+  pub fn new() -> Self {
+    let stdout = io::stdout()
+      .into_raw_mode()
       .expect("Failed to put terminal into 'raw mode'");
     
-		let backend = TermionBackend::new(stdout);
-		let mut terminal = Terminal::new(backend).expect("Failed to initialize terminal abstraction");
-		
-		terminal.clear().expect("Failed to clear terminal");
-		terminal.hide_cursor().expect("Failed to hide cursor");
+    let backend = TermionBackend::new(stdout);
+    let mut terminal = Terminal::new(backend).expect("Failed to initialize terminal abstraction");
+    
+    terminal.clear().expect("Failed to clear terminal");
+    terminal.hide_cursor().expect("Failed to hide cursor");
 
     println!("Searching. Devices appear as they're discovered.");
 
-		UI {
-			terminal,
-			devices: vec![],
-			selected_device_index: 0,
+    UI {
+      terminal,
+      devices: vec![],
+      selected_device_index: 0,
       context: UIContext::Main,
       active_keys: Arc::from(Mutex::from(HashMap::new()))
-		}
-	}
+    }
+  }
 
-	// draw based on state
-	fn render(&mut self) {
+  // draw based on state
+  fn render(&mut self) {
     let tab_titles: Vec<Spans> = self.devices.iter().map(|d| Spans::from(d.device_info().name.clone())).collect();
     let selected_index = self.selected_device_index;
     let selected_device = &self.devices[selected_index];
@@ -91,16 +91,16 @@ impl UI {
       )
     };
 
-		self.terminal.draw(move |f| {
-			let (terminal_char_width, terminal_char_height) = termion::terminal_size().expect("Failed to get information about terminal size (in chars)");
-			let (terminal_px_width, terminal_px_height) = termion::terminal_size_pixels().expect("Failed to get information about terminal size (in pixels)");
-		
-			let terminal_font_px_width = (terminal_px_width as f64) / (terminal_char_width as f64);
-			let terminal_font_px_height = (terminal_px_height as f64) / (terminal_char_height as f64);
-		
-			let remote_char_width = REMOTE_WIDTH_PIXELS / terminal_font_px_width;
-			let remote_char_height = REMOTE_ASPECT_RATIO * REMOTE_WIDTH_PIXELS / terminal_font_px_height;
-		
+    self.terminal.draw(move |f| {
+      let (terminal_char_width, terminal_char_height) = termion::terminal_size().expect("Failed to get information about terminal size (in chars)");
+      let (terminal_px_width, terminal_px_height) = termion::terminal_size_pixels().expect("Failed to get information about terminal size (in pixels)");
+    
+      let terminal_font_px_width = (terminal_px_width as f64) / (terminal_char_width as f64);
+      let terminal_font_px_height = (terminal_px_height as f64) / (terminal_char_height as f64);
+    
+      let remote_char_width = REMOTE_WIDTH_PIXELS / terminal_font_px_width;
+      let remote_char_height = REMOTE_ASPECT_RATIO * REMOTE_WIDTH_PIXELS / terminal_font_px_height;
+    
       let tabs = 
         Tabs::new(tab_titles)
           .block(
@@ -120,9 +120,9 @@ impl UI {
           )
           .divider(VERTICAL)
           .select(selected_index);
-			f.render_widget(tabs, Rect::new(0, 0, remote_char_width.round() as u16, 3));
+      f.render_widget(tabs, Rect::new(0, 0, remote_char_width.round() as u16, 3));
 
-			let info_contents = match context {
+      let info_contents = match context {
         UIContext::Main => vec![
           Spans::from(Span::raw(format!(" {} ({})", info.name, ip)))
         ],
@@ -292,14 +292,14 @@ impl UI {
   /// Only redraws when an event has occurred, however does not perform any logic
   /// to determine if the UI actually needs to be re-rendered, so is maybe 
   /// slightly suboptimal depending on the cost of this logic.
-	pub async fn listen(&mut self, rx: UnboundedReceiver<Device>) {
+  pub async fn listen(&mut self, rx: UnboundedReceiver<Device>) {
     let mut input = user_input();
     let mut press = Box::pin(input.next());
 
     let mut discovery = UnboundedReceiverStream::new(rx);
-		let mut device = Box::pin(discovery.next());
+    let mut device = Box::pin(discovery.next());
 
-		loop {      
+    loop {      
       match select(press, device).await {
         Either::Left((k, f)) => {
           if let Some(key) = k { if self.on_key(key).await { break; } } 
@@ -318,6 +318,6 @@ impl UI {
       }
 
       self.render();
-		}
+    }
   }
 }
