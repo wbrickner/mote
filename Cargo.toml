@@ -1,6 +1,6 @@
 [package]
 name = "cargo-mote"
-version = "0.1.2"
+version = "0.1.3"
 authors = ["Will Brickner <wgbrickner@gmail.com>"]
 description = "Control Roku TVs from your terminal"
 edition = "2021"
