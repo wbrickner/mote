@@ -106,7 +106,7 @@ async fn device_info(location: std::net::SocketAddr) -> anyhow::Result<Device> {
 
   // intermediate struct => general device struct
   Ok(Device {
-    variant: DeviceType::Roku,
+    _variant: DeviceType::Roku,
     location,
     info
   })

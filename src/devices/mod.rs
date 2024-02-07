@@ -12,7 +12,7 @@ use roku::*;
 
 #[derive(Debug, Clone)]
 pub struct Device {
-  variant: DeviceType,
+  _variant: DeviceType,
   location: std::net::SocketAddr,
   info: DeviceInfo
 }
