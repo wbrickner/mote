@@ -1,5 +1,6 @@
-use futures::{channel::mpsc::UnboundedReceiver, future::{select, Either}, stream::StreamExt};
+use futures::future::{select, Either};
 use std::{collections::HashMap, time::Instant};
+use tokio::sync::mpsc::UnboundedReceiver;
 use std::io;
 use std::sync::{Arc, Mutex};
 use termion::{event::Key, raw::{IntoRawMode, RawTerminal}};
@@ -12,11 +13,12 @@ use tui::{
   widgets::{Block, BorderType, Borders, Paragraph, Tabs},
   symbols::line::VERTICAL
 };
+use tokio_stream::{wrappers::UnboundedReceiverStream, StreamExt};
+use crate::devices::device_input::DeviceInput;
+use self::user_input::user_input;
 
+use super::devices::{Device, roku::RokuKey};
 mod user_input;
-use user_input::UserInput;
-
-use crate::devices::{Device, DeviceInput, RokuKey};
 
 const REMOTE_ASPECT_RATIO: f64 = 2.0 / 5.5;
 const REMOTE_WIDTH_PIXELS: f64 = 512.0;
@@ -68,7 +70,7 @@ impl UI {
     let tab_titles: Vec<Spans> = self.devices.iter().map(|d| Spans::from(d.device_info().name.clone())).collect();
     let selected_index = self.selected_device_index;
     let selected_device = &self.devices[selected_index];
-    let ip = selected_device.ip().clone();
+    let ip = selected_device.ip_string().clone();
     let info = selected_device.device_info();
     let context = &self.context;
 
@@ -79,14 +81,13 @@ impl UI {
       dpad_state, 
       kpad_state
     ) = {
-      let keystates = self.active_keys.lock().unwrap();
-
+      let ks = self.active_keys.lock().unwrap();
       (
-        keystates.get(&Key::Char('w')).and_then(|&(s, _)| Some(s)).unwrap_or(false),
-        keystates.get(&Key::Char('a')).and_then(|&(s, _)| Some(s)).unwrap_or(false),
-        keystates.get(&Key::Char('s')).and_then(|&(s, _)| Some(s)).unwrap_or(false),
-        keystates.get(&Key::Char('d')).and_then(|&(s, _)| Some(s)).unwrap_or(false),
-        keystates.get(&Key::Char(' ')).and_then(|&(s, _)| Some(s)).unwrap_or(false)
+        ks.contains_key(&Key::Char('w')),
+        ks.contains_key(&Key::Char('a')),
+        ks.contains_key(&Key::Char('s')),
+        ks.contains_key(&Key::Char('d')),
+        ks.contains_key(&Key::Char(' '))
       )
     };
 
@@ -172,18 +173,28 @@ impl UI {
       );
 
       // render the direction pads
-      let w_pad  = Paragraph::new("\nW").style(    Style::default().bg(if wpad_state { Color::Blue } else { Color::LightBlue }).fg(Color::White)).alignment(Alignment::Center);
-      let a_pad  = Paragraph::new("\nA").style(    Style::default().bg(if apad_state { Color::Blue } else { Color::LightBlue }).fg(Color::White)).alignment(Alignment::Center);
-      let s_pad  = Paragraph::new("\nS").style(    Style::default().bg(if spad_state { Color::Blue } else { Color::LightBlue }).fg(Color::White)).alignment(Alignment::Center);
-      let d_pad  = Paragraph::new("\nD").style(    Style::default().bg(if dpad_state { Color::Blue } else { Color::LightBlue }).fg(Color::White)).alignment(Alignment::Center);
-      let ok_pad = Paragraph::new("\nSPACE").style(Style::default().bg(if kpad_state { Color::Blue } else { Color::LightBlue }).fg(Color::White)).alignment(Alignment::Center);
-      
+      let pad = |name, state| {
+        Paragraph::new(name)
+          .style(
+            Style::default()
+              .bg(if state { Color::Blue } else { Color::LightBlue })
+              .fg(Color::White)
+          )
+          .alignment(Alignment::Center)
+      };
+
+      let w_pad  = pad("\nW", wpad_state);
+      let a_pad  = pad("\nA", apad_state);
+      let s_pad  = pad("\nS", spad_state);
+      let d_pad  = pad("\nD", dpad_state);
+      let ok_pad = pad("\nSPACE", kpad_state);
+
       let dirpad_y_offset = remote_height / 2 - 1;
       let dirpad_x_offset = 4;
-      let pad_width = 7;
-      let pad_height = 3;
-      let x_extension = 7;
-      let y_extension = 3;
+      let pad_width       = 7;
+      let pad_height      = 3;
+      let x_extension     = 7;
+      let y_extension     = 3;
 
       f.render_widget(w_pad,  Rect::new(dirpad_x_offset + x_extension,     remote_y + dirpad_y_offset - y_extension, pad_width, pad_height));
       f.render_widget(s_pad,  Rect::new(dirpad_x_offset + x_extension,     remote_y + dirpad_y_offset + y_extension, pad_width, pad_height));
@@ -192,23 +203,23 @@ impl UI {
       f.render_widget(ok_pad, Rect::new(dirpad_x_offset + x_extension,     remote_y + dirpad_y_offset - 0,           pad_width, pad_height));
 
       // render the back and home buttons
-      let buttons_x_offset = remote_width - 45;
-      let buttons_y_offset = remote_y + dirpad_y_offset - y_extension + 1;
-      let button_pad_width = 11;
+      let buttons_x_offset  = remote_width - 45;
+      let buttons_y_offset  = remote_y + dirpad_y_offset - y_extension + 1;
+      let button_pad_width  = 11;
       let button_pad_height = 3;
       let button_pad_margin = 4;
 
-      let back_pad = Paragraph::new("\n⌫").style(Style::default().bg(Color::DarkGray).fg(Color::White)).alignment(Alignment::Center);
-      let home_pad = Paragraph::new("\nH").style(Style::default().bg(Color::DarkGray).fg(Color::White)).alignment(Alignment::Center);
-      let power_pad = Paragraph::new("\nP").style(Style::default().bg(Color::DarkGray).fg(Color::LightRed)).alignment(Alignment::Center);
+      let back_pad   = Paragraph::new("\n⌫").style(Style::default().bg(Color::DarkGray).fg(Color::White)).alignment(Alignment::Center);
+      let home_pad   = Paragraph::new("\nH").style(Style::default().bg(Color::DarkGray).fg(Color::White)).alignment(Alignment::Center);
+      let power_pad  = Paragraph::new("\nP").style(Style::default().bg(Color::DarkGray).fg(Color::LightRed)).alignment(Alignment::Center);
+
+      f.render_widget(back_pad,   Rect::new(buttons_x_offset,                                            buttons_y_offset, button_pad_width, button_pad_height));
+      f.render_widget(home_pad,   Rect::new(buttons_x_offset + button_pad_width + button_pad_margin,     buttons_y_offset, button_pad_width, button_pad_height));
+      f.render_widget(power_pad,  Rect::new(buttons_x_offset + 2*(button_pad_width + button_pad_margin), buttons_y_offset, button_pad_width, button_pad_height));
 
       let replay_pad = Paragraph::new("\n↺").style(Style::default().bg(Color::DarkGray).fg(Color::White)).alignment(Alignment::Center);
-      let star_pad = Paragraph::new("\n*").style(Style::default().bg(Color::DarkGray).fg(Color::White)).alignment(Alignment::Center);
-      let mute_pad = Paragraph::new("\nM").style(Style::default().bg(Color::DarkGray).fg(Color::White)).alignment(Alignment::Center);
-
-      f.render_widget(back_pad,  Rect::new(buttons_x_offset,                                            buttons_y_offset, button_pad_width, button_pad_height));
-      f.render_widget(home_pad,  Rect::new(buttons_x_offset + button_pad_width + button_pad_margin,     buttons_y_offset, button_pad_width, button_pad_height));
-      f.render_widget(power_pad, Rect::new(buttons_x_offset + 2*(button_pad_width + button_pad_margin), buttons_y_offset, button_pad_width, button_pad_height));
+      let star_pad   = Paragraph::new("\n*").style(Style::default().bg(Color::DarkGray).fg(Color::White)).alignment(Alignment::Center);
+      let mute_pad   = Paragraph::new("\nM").style(Style::default().bg(Color::DarkGray).fg(Color::White)).alignment(Alignment::Center);
 
       f.render_widget(replay_pad, Rect::new(buttons_x_offset,                                            buttons_y_offset + button_pad_height + 1, button_pad_width, button_pad_height));
       f.render_widget(star_pad,   Rect::new(buttons_x_offset + button_pad_width + button_pad_margin,     buttons_y_offset + button_pad_height + 1, button_pad_width, button_pad_height));
@@ -217,20 +228,20 @@ impl UI {
     .expect("Failed to render")
   }
 
-  pub fn supply_input(&mut self, input: DeviceInput) {
+  fn send(&mut self, input: DeviceInput) {
     if let Some(device) = self.devices.get(self.selected_device_index) {
-      device.supply_input(input)
+      device.send_input(input)
     }
   }
 
-  async fn handle_key(&mut self, key: Key) -> bool {
+  async fn on_key(&mut self, key: Key) -> bool {
     match key {
-      Key::Delete | Key::Backspace => self.supply_input(RokuKey::Back.into()),
-      Key::Esc => self.supply_input(RokuKey::Home.into()),
+      Key::Delete | Key::Backspace => self.send(RokuKey::Back.into()),
+      Key::Esc => self.send(RokuKey::Home.into()),
 
-      Key::Up => self.supply_input(RokuKey::VolumeUp.into()),
-      Key::Down => self.supply_input(RokuKey::VolumeDown.into()),
-      Key::Left => self.supply_input(RokuKey::InstantReplay.into()),
+      Key::Up => self.send(RokuKey::VolumeUp.into()),
+      Key::Down => self.send(RokuKey::VolumeDown.into()),
+      Key::Left => self.send(RokuKey::InstantReplay.into()),
       Key::BackTab => {
         if self.selected_device_index == 0 {
           if self.devices.len() != 0 {
@@ -250,17 +261,17 @@ impl UI {
         },
 
         // special control keys
-        'p' | 'P'  => self.supply_input(RokuKey::Power.into()),
-        'h' | 'H'  => self.supply_input(RokuKey::Home.into()),
-        'm' | 'M'  => self.supply_input(RokuKey::VolumeMute.into()),
-        '*'        => self.supply_input(RokuKey::Info.into()),
+        'p' | 'P'  => self.send(RokuKey::Power.into()),
+        'h' | 'H'  => self.send(RokuKey::Home.into()),
+        'm' | 'M'  => self.send(RokuKey::VolumeMute.into()),
+        '*'        => self.send(RokuKey::Info.into()),
 
         // arrow pad keys
-        'w' | 'W' => self.supply_input(RokuKey::PadUp.into()),
-        'a' | 'A' => self.supply_input(RokuKey::PadLeft.into()),
-        's' | 'S' => self.supply_input(RokuKey::PadDown.into()),
-        'd' | 'D' => self.supply_input(RokuKey::PadRight.into()),
-        ' '       => self.supply_input(RokuKey::Ok.into()),
+        'w' | 'W' => self.send(RokuKey::PadUp.into()),
+        'a' | 'A' => self.send(RokuKey::PadLeft.into()),
+        's' | 'S' => self.send(RokuKey::PadDown.into()),
+        'd' | 'D' => self.send(RokuKey::PadRight.into()),
+        ' '       => self.send(RokuKey::Ok.into()),
 
         _ => return false
       },
@@ -274,31 +285,6 @@ impl UI {
       _ => return false
     }
 
-    // mark key as active and immediately drop lock (unlock)
-    // let instant = Instant::now();
-    // let storage_key = match key {
-    //   Key::Char(c) => Key::Char(c.to_ascii_uppercase()),
-    //   k => k
-    // };
-
-    // {
-    //   (*self.active_keys).lock().unwrap().insert(storage_key, (true, instant.clone()));
-    // }
-
-    // spawn task to mark inactive in 100ms
-    // let active_keys_ref = Arc::clone(&self.active_keys);
-
-    // tokio::spawn(async move {
-    //   delay_for(Duration::from_millis(100)).await;
-    //   let mut keystates = (*active_keys_ref).lock().unwrap();
-    //   if let Some(&(_, event_instant)) = keystates.get(&storage_key) {
-    //     // a newer event created the current active state, do nothing and let it live a full life (<3)
-    //     if event_instant != instant { return }
-    //     // otherwise, set it to inactive
-    //     keystates.insert(storage_key, (false, event_instant));
-    //   }
-    // });
-
     false
   }
 
@@ -306,34 +292,30 @@ impl UI {
   /// Only redraws when an event has occurred, however does not perform any logic
   /// to determine if the UI actually needs to be re-rendered, so is maybe 
   /// slightly suboptimal depending on the cost of this logic.
-	pub async fn listen(&mut self, roku_discovery_rx: &mut UnboundedReceiver<Device>) {
-    let mut user_input_events = UserInput::new();
-    let mut key_future = user_input_events.next();
-		let mut device_future = roku_discovery_rx.next();
+	pub async fn listen(&mut self, rx: UnboundedReceiver<Device>) {
+    let mut input = user_input();
+    let mut press = Box::pin(input.next());
+
+    let mut discovery = UnboundedReceiverStream::new(rx);
+		let mut device = Box::pin(discovery.next());
 
 		loop {
-      match select(key_future, device_future).await {
-        Either::Left((key, new_device_and_render_future)) => {
-          if let Some(key) = key {
-            if self.handle_key(key).await { break; }
-            self.render();
-          } else {
-            break // channel corrupted, input task died, end the UI loop as well
-          }
+      self.render();
+      
+      match select(press, device).await {
+        Either::Left((k, f)) => {
+          if let Some(key) = k { if self.on_key(key).await { break; } } 
+          else { break }
 
-          key_future = user_input_events.next();
-          device_future = new_device_and_render_future;
+          press = Box::pin(input.next());
+          device = f;
         },
-        Either::Right((device, new_key_future)) => {
-          if let Some(device) = device {
-            self.devices.push(device);
-            self.render();
-          } else {
-            break // channel corrupted, discovery task died, end the UI loop as well
-          }
+        Either::Right((d, f)) => {
+          if let Some(device) = d { self.devices.push(device); } 
+          else { break }
 
-          key_future = new_key_future;
-          device_future = roku_discovery_rx.next();
+          press = f;
+          device = Box::pin(discovery.next())
         }
       }
 		}

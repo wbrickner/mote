@@ -2,23 +2,25 @@
 name = "cargo-mote"
 version = "0.1.2"
 authors = ["Will Brickner <wgbrickner@gmail.com>"]
-description = "Control Roku TVs from your terminal."
-edition = "2018"
+description = "Control Roku TVs from your terminal"
+edition = "2021"
 repository = "https://github.com/wbrickner/mote"
 keywords = ["roku", "tv", "remote", "mote"]
 categories = ["command-line-utilities"]
 license = "MIT"
 
-[profile.release]
-lto = "fat"
-codegen-units = 1
-
 [dependencies]
-ssdp = "0.7.0"
-hyper = "0.13"
-tokio = { version = "0.2", features = ["full"] }
-futures = "0.3"
-serde = { version = "1", features = ["derive"] }
-serde-xml-rs = "0.4.0"
-tui = "0.14"
 termion = "1.5.5"
+tui = "0.14"
+
+serde-xml-rs = "0.4.0"
+serde = { version = "^1", features = ["derive"] }
+
+futures-util = "0.3.30"
+futures = "0.3"
+tokio = { version = "^1", features = ["full"] }
+ssdp = "0.7.0"
+anyhow = "1.0.79"
+reqwest = "0.11.24"
+tokio-stream = "0.1.14"
+static_init = "1.0.3"
