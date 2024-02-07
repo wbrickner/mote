@@ -299,9 +299,7 @@ impl UI {
     let mut discovery = UnboundedReceiverStream::new(rx);
 		let mut device = Box::pin(discovery.next());
 
-		loop {
-      self.render();
-      
+		loop {      
       match select(press, device).await {
         Either::Left((k, f)) => {
           if let Some(key) = k { if self.on_key(key).await { break; } } 
@@ -318,6 +316,8 @@ impl UI {
           device = Box::pin(discovery.next())
         }
       }
+
+      self.render();
 		}
   }
 }
